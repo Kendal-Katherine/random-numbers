@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"random-numbers/infrastructure/database"
 
@@ -50,4 +51,18 @@ func InitializeSQLite() (*gorm.DB, error) {
 	//Return the database connection
 	logger.Infof("SQLite database connection initialized successfully.")
 	return db, nil
+}
+
+func FindByNumber(db *gorm.DB, number int) (*database.RandomNumber, error) {
+	var result database.RandomNumber
+
+	err := db.Where("number = ?", number).First(&result).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // Retorna nil sem erro se não encontrado
+		}
+		return nil, err // Retorna erro se for erro real
+	}
+
+	return &result, nil
 }
