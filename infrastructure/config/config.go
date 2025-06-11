@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+
+	"github.com/joho/godotenv"
 	gorm "gorm.io/gorm"
 )
 
@@ -28,4 +31,17 @@ func GetLogger(p string) *Logger {
 	// Initialize the logger
 	logger := NewLogger(p)
 	return logger
+}
+
+
+func LoadEnv() {
+	logger := GetLogger("loadEnv")
+	err := godotenv.Load("../.env")
+	if err != nil {
+		logger.Errorf("No .env file found or error loading .env")
+	}
+}
+
+func GetAPIKey() string {
+	return os.Getenv("API_KEY")
 }
