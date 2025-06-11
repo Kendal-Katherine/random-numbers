@@ -2,10 +2,10 @@ package handler
 
 import (
 	"encoding/json"
-	"math/rand"
 	"net/http"
 	"random-numbers/infrastructure/config"
 	"random-numbers/infrastructure/database"
+	"random-numbers/internal/random/mersenne"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,22 +14,33 @@ import (
 
 func CreateRandomNumber(ctx *gin.Context) {
 
-	request := Request {}
+	request := Request{}
 
-	if err := json.NewDecoder(ctx.Request.Body).Decode(&request); err != nil {
-		sendErrorResponse(ctx, http.StatusBadRequest, "Failed to parse request body")
-		return
+	//Try to decode the request body into the Request struct
+	//It's ideal to validate seed 
+	_ = json.NewDecoder(ctx.Request.Body).Decode(&request)
+
+	// Check if the seed is provided in the request
+	var seedTime time.Time
+	if request.Seed == "" {
+		seedTime = time.Now()
+		request.Seed = seedTime.Format(time.RFC3339Nano)
+	} else {
+		parsedSeed, err := time.Parse(time.RFC3339Nano, request.Seed)
+		if err != nil {
+			sendErrorResponse(ctx, http.StatusBadRequest, "Invalid seed format (expected RFC3339Nano)")
+			return
+		}
+		seedTime = parsedSeed
 	}
-	if err := request.Validate(); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
+
+	seed := uint32(seedTime.UnixNano())
+	mt := mersenne.NewMT19937(seed)
+	randomNumber := int(mt.ExtractNumber() % 100)
 
 	input := database.RandomNumber{
 		ID:        uuid.New().String(),
-		Number:    rand.Intn(5),
+		Number:    randomNumber,
 		Seed:      request.Seed,
 		CreatedAt: time.Now().Format(time.RFC3339),
 	}
@@ -51,13 +62,6 @@ func CreateRandomNumber(ctx *gin.Context) {
 		return
 	}
 
-	// err := rand.Seed(time.Now().UnixNano())
-	// if err != nil {
-	// 	logger.Errorf("Failed to seed random number generator: %v", err)
-	// 	sendErrorResponse(ctx, http.StatusInternalServerError, "Failed to seed random number generator")
-	// 	return
-	// }
-	
 	if err := db.Create(&input).Error; err != nil {
 		logger.Errorf("Failed to create random number: %v", err)
 		sendErrorResponse(ctx, http.StatusInternalServerError, "Failed to create random number")
@@ -67,4 +71,3 @@ func CreateRandomNumber(ctx *gin.Context) {
 	logger.Infof("Request received with seed: %s", request)
 	sendSuccessResponse(ctx, http.StatusCreated, input)
 }
-
